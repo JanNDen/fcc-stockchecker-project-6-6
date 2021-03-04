@@ -25,7 +25,8 @@ app.set("trust proxy", true);
 app.use(helmet.contentSecurityPolicy({
   directives: {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "repl.it"],
+    scriptSrc: ["'self'", "'unsafe-inline'", "repl.it", "repl.co", "code.jquery.com", "cdn.freecodecamp.org"],
+    styleSrc: ["'self'", "'unsafe-inline'", "repl.it", "repl.co", "code.jquery.com", "cdn.freecodecamp.org"],
   }
 }));
 

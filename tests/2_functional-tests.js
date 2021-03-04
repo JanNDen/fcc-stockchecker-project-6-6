@@ -9,6 +9,7 @@
 var chaiHttp = require('chai-http');
 var chai = require('chai');
 var assert = chai.assert;
+var expect = chai.expect;
 var server = require('../server');
 
 chai.use(chaiHttp);
@@ -46,7 +47,7 @@ suite('Functional Tests', function() {
          assert.property(res.body.stockData, "likes");
          assert.equal(res.body.stockData.stock, "MSFT");
          secondLikes = res.body.stockData.likes;
-         assert.equal(secondLikes-1, firstLikes);
+         expect(secondLikes).to.be.at.least(firstLikes);
          done();
         });
       });

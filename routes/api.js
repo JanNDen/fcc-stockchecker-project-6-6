@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const db = mongoose.connect(process.env.DB, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
+  useFindAndModify: false
 });
 const { Schema } = mongoose;
 
@@ -22,17 +23,21 @@ module.exports = function (app) {
 
     // Get variables
     const { stock, like } = req.query;
-    let ip = (req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress || "").split(",")[0].trim();
-    if(!like) ip = "";
-    let formattedStocks = [];
-    let stocksCount = 1;
-    let currentLoop = 1;
+    let ip = [];
+    if(like) ip.push((req.ip || req.headers["x-forwarded-for"] || req.connection.remoteAddress || "").split(",")[0].trim());
+    let formattedStocks = []; // Will be used for the final output
+    let stocksCount = 1; // Will be used to wait in forEach for the right moment to spit out the final output
+    let currentLoop = 1; // Detto, this is necessary due to async nature of mongoose -> the output has to be released from inside findOneAndUpdate
 
     // Prepare fetching stock data
     let promises = [];
     if (Array.isArray(stock)) {
+      // If it's an array, we want to fetch two stocks at once
       stocksCount = 2;
-      promises = [fetch("https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/" + stock[0] + "/quote"), fetch("https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/" + stock[1] + "/quote")];
+      promises = [
+        fetch("https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/" + stock[0] + "/quote"),
+        fetch("https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/" + stock[1] + "/quote")
+      ];
     } else promises = [fetch("https://stock-price-checker-proxy.freecodecamp.rocks/v1/stock/" + stock + "/quote")];
 
     // Fetch the data
@@ -43,24 +48,25 @@ module.exports = function (app) {
       .then(function (responseData) {
         responseData.forEach((item) => {
 
-
+          // Thanks to findOneAndUpdate, we can update a stock with new IP (addToSet takes care of duplicates) and thanks to upsert:true it will automatically create a new stock if it doesn't exist yet
           StockModel.findOneAndUpdate(
             { stock: item.symbol },
             { $addToSet: { likes: ip } },
             { new: true, upsert: true },
             (err, updatedData) => {
-              if (err || !updatedData) {
-                console.log("error updating stock", err);
-                res.json({ error: "error updating stock" });
-              } else {
-                console.log("stock updated", updatedData);
+              if (err || !updatedData) res.json({ error: "error updating stock" });
+              else {
+
+                // Gather all desired info about this stock
                 formattedStocks.push({
                   stock: item.symbol,
                   price: item.latestPrice,
                   likes: updatedData.likes.length,
                 });
 
+                // If we looped over all stocks already
                 if(stocksCount == currentLoop) {
+                  // Prepare the final output based on whether we send info about one or two stocks
                   if (formattedStocks.length === 1)
                     res.json({ stockData: formattedStocks[0] });
                   else {
